@@ -4,12 +4,6 @@ from numpy.typing import NDArray
 CWD = os.getcwd()
 PATH = os.path.join(CWD, "source_4.txt")
 
-DIR = [
-    [-1, -1], [-1, 0], [-1, 1],
-    [0, -1],           [0, 1],
-    [1, -1], [1, 0], [1, 1],
-]
-
 def parse_source_file():
     with open(PATH, mode="r") as f:
         content = [[c for c in line.strip()] for line in f]
@@ -17,24 +11,20 @@ def parse_source_file():
     return np.array(content)
 
 def find_accessible_rolls(roll_map: NDArray[np.int64], padded_roll_map: NDArray[np.int64]) -> int:
-    sum_toilet_paper = 0
-    length, height = roll_map.shape
-    coordinates = []
-    for row in range(1, height + 1):
-        for col in range(1, length + 1):
-            if padded_roll_map[row][col] != '@':
-                continue
-            
-            sum_rolls = 0
-            for x, y in DIR:
-                if padded_roll_map[row + x][col + y] == '@':
-                    sum_rolls += 1
-            
-            if sum_rolls < 4:
-                sum_toilet_paper += 1
-                coordinates.append((row - 1, col - 1))
-
-    return sum_toilet_paper, coordinates
+    is_roll = (roll_map == '@').astype(int)
+    padded = np.pad(is_roll, 1, constant_values=0)
+    
+    # Sum all 8 neighbors using slicing
+    neighbor_counts = (
+        padded[:-2, :-2] + padded[:-2, 1:-1] + padded[:-2, 2:] +  # top row
+        padded[1:-1, :-2] +                    padded[1:-1, 2:] +  # middle (no center)
+        padded[2:, :-2]  + padded[2:, 1:-1]  + padded[2:, 2:]     # bottom row
+    )
+    
+    accessible = is_roll & (neighbor_counts < 4)
+    coordinates = list(zip(*np.where(accessible)))
+    
+    return accessible.sum(), coordinates
 
 def remove_toilet_papers(roll_map: NDArray[np.int64]):
     padded_roll_map = np.pad(roll_map, 1, constant_values='.')
@@ -42,9 +32,12 @@ def remove_toilet_papers(roll_map: NDArray[np.int64]):
     sum_toilet_paper = np.nan
     while sum_toilet_paper != 0:
         sum_toilet_paper, coordinates = find_accessible_rolls(roll_map, padded_roll_map)
-        for x, y in coordinates:
-            roll_map[x][y] = '.'
-            padded_roll_map[x + 1][y + 1] = '.'
+        coords = np.array(coordinates)
+        if len(coords) > 0:
+            rows, cols = coords[:, 0], coords[:, 1]
+            
+            roll_map[rows, cols] = '.'
+            padded_roll_map[rows + 1, cols + 1] = '.'
         
         print(f"Removed toilet papers: ({len(coordinates)}, {sum_toilet_paper})")
         total_sum += sum_toilet_paper
